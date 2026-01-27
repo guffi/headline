@@ -7,7 +7,12 @@ const PORT = 3000;
 const HEADLINES_FILE = path.join(__dirname, 'headlines.json');
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve index.html for root
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Load data from file
 function loadData() {
