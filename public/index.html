@@ -424,9 +424,12 @@
         if (countries.includes(myCountry)) {
           select.value = myCountry;
         } else {
-          // User's country not in enabled list, default to The World
-          select.value = 'The World';
-          currentCountry = 'The World';
+          // User's country not in enabled list, add it to dropdown
+          const opt = document.createElement('option');
+          opt.value = myCountry;
+          opt.textContent = myCountry;
+          select.insertBefore(opt, select.options[1]); // After "The World"
+          select.value = myCountry;
         }
 
         await loadHeadline(currentCountry);
