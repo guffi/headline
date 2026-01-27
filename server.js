@@ -1,10 +1,11 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = 3000;
-const HEADLINES_FILE = path.join(__dirname, 'headlines.json');
+
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -14,44 +15,26 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Load data from file
-function loadData() {
-  try {
-    if (fs.existsSync(HEADLINES_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(HEADLINES_FILE, 'utf8'));
-
-      // Migrate from old format (plain strings) to new format (objects with timestamp)
-      if (!raw.headlines) {
-        const migrated = { headlines: {}, history: [] };
-        const now = Date.now();
-        for (const [country, value] of Object.entries(raw)) {
-          if (typeof value === 'string') {
-            migrated.headlines[country] = { headline: value, timestamp: now };
-            migrated.history.push({ country, headline: value, timestamp: now });
-          }
-        }
-        return migrated;
-      }
-
-      return raw;
-    }
-  } catch (err) {
-    console.error('Error loading data:', err);
-  }
-  return { headlines: {}, history: [] };
-}
-
-// Save data to file
-function saveData(data) {
-  fs.writeFileSync(HEADLINES_FILE, JSON.stringify(data, null, 2));
+// Redis helper functions
+async function redis(command, ...args) {
+  const response = await fetch(`${UPSTASH_URL}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${UPSTASH_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify([command, ...args]),
+  });
+  const data = await response.json();
+  return data.result;
 }
 
 // Get visitor's country from their IP
 app.get('/api/location', async (req, res) => {
   try {
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    if (ip.includes(',')) ip = ip.split(',')[0].trim();
-    if (ip === '::1' || ip === '127.0.0.1') ip = '';
+    if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
+    if (!ip || ip === '::1' || ip === '127.0.0.1') ip = '';
 
     const response = await fetch(`http://ip-api.com/json/${ip}`);
     const data = await response.json();
@@ -68,56 +51,70 @@ app.get('/api/location', async (req, res) => {
 });
 
 // Get headline for a country
-app.get('/api/headline/:country', (req, res) => {
-  const country = req.params.country;
-  const data = loadData();
-  const entry = data.headlines[country] || null;
-  res.json({
-    country,
-    headline: entry ? entry.headline : null,
-    timestamp: entry ? entry.timestamp : null
-  });
+app.get('/api/headline/:country', async (req, res) => {
+  try {
+    const country = req.params.country;
+    const data = await redis('HGET', 'headlines', country);
+
+    if (data) {
+      const parsed = JSON.parse(data);
+      res.json({ country, headline: parsed.headline, timestamp: parsed.timestamp });
+    } else {
+      res.json({ country, headline: null, timestamp: null });
+    }
+  } catch (err) {
+    console.error('Get headline error:', err);
+    res.json({ country: req.params.country, headline: null, timestamp: null });
+  }
 });
 
 // Set headline for a country
-app.post('/api/headline/:country', (req, res) => {
-  const country = req.params.country;
-  const { headline } = req.body;
+app.post('/api/headline/:country', async (req, res) => {
+  try {
+    const country = req.params.country;
+    const { headline } = req.body;
 
-  if (!headline || typeof headline !== 'string') {
-    return res.status(400).json({ error: 'Headline is required' });
+    if (!headline || typeof headline !== 'string') {
+      return res.status(400).json({ error: 'Headline is required' });
+    }
+
+    const timestamp = Date.now();
+    const trimmedHeadline = headline.trim().substring(0, 500);
+
+    const entry = JSON.stringify({ headline: trimmedHeadline, timestamp });
+
+    // Save headline
+    await redis('HSET', 'headlines', country, entry);
+
+    // Add to country's history (keep last 50)
+    const historyKey = `history:${country}`;
+    await redis('LPUSH', historyKey, entry);
+    await redis('LTRIM', historyKey, 0, 49);
+
+    res.json({ country, headline: trimmedHeadline, timestamp });
+  } catch (err) {
+    console.error('Set headline error:', err);
+    res.status(500).json({ error: 'Failed to save headline' });
   }
-
-  const data = loadData();
-  const timestamp = Date.now();
-  const trimmedHeadline = headline.trim().substring(0, 500);
-
-  data.headlines[country] = {
-    headline: trimmedHeadline,
-    timestamp
-  };
-
-  // Add to history (keep last 50 for storage, we'll send last 10)
-  data.history.unshift({
-    country,
-    headline: trimmedHeadline,
-    timestamp
-  });
-  data.history = data.history.slice(0, 50);
-
-  saveData(data);
-
-  res.json({ country, headline: trimmedHeadline, timestamp });
 });
 
 // Get recent headlines for a country
-app.get('/api/recent/:country', (req, res) => {
-  const country = req.params.country;
-  const data = loadData();
-  const countryHistory = data.history
-    .filter(item => item.country === country)
-    .slice(0, 10);
-  res.json({ recent: countryHistory });
+app.get('/api/recent/:country', async (req, res) => {
+  try {
+    const country = req.params.country;
+    const historyKey = `history:${country}`;
+    const history = await redis('LRANGE', historyKey, 0, 9);
+
+    const recent = (history || []).map(item => {
+      const parsed = JSON.parse(item);
+      return { country, headline: parsed.headline, timestamp: parsed.timestamp };
+    });
+
+    res.json({ recent });
+  } catch (err) {
+    console.error('Get recent error:', err);
+    res.json({ recent: [] });
+  }
 });
 
 // For local development
