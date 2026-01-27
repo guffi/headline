@@ -374,7 +374,16 @@
   <div class="status-toast" id="toast">Headline updated</div>
 
   <script>
-    const countries = [
+    // ENABLED COUNTRIES - add countries here to make them available
+    // Set to null to enable all countries
+    const enabledCountries = [
+      "The World",
+      "Iceland",
+      "Netherlands",
+      "United States"
+    ];
+
+    const allCountries = [
       "The World",
       "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
       "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan",
@@ -411,14 +420,13 @@
         currentCountry = myCountry;
 
         const select = document.getElementById('countrySelect');
+        const countries = getCountries();
         if (countries.includes(myCountry)) {
           select.value = myCountry;
         } else {
-          const opt = document.createElement('option');
-          opt.value = myCountry;
-          opt.textContent = myCountry;
-          select.insertBefore(opt, select.options[1]);
-          select.value = myCountry;
+          // User's country not in enabled list, default to The World
+          select.value = 'The World';
+          currentCountry = 'The World';
         }
 
         await loadHeadline(currentCountry);
@@ -431,11 +439,16 @@
       }
     }
 
+    function getCountries() {
+      // If enabledCountries is null, return all countries
+      return enabledCountries || allCountries;
+    }
+
     function populateCountries() {
       const select = document.getElementById('countrySelect');
       select.innerHTML = '';
 
-      countries.forEach(country => {
+      getCountries().forEach(country => {
         const opt = document.createElement('option');
         opt.value = country;
         opt.textContent = country;
