@@ -134,6 +134,30 @@
       border-bottom-color: #1d1d1f;
     }
 
+    .char-counter {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 8px;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+      pointer-events: none;
+    }
+
+    .char-counter.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .char-counter.warning {
+      color: #ff9500;
+    }
+
+    .char-counter.critical {
+      color: #ff3b30;
+      font-weight: 500;
+    }
+
     .submit-btn {
       font-size: 17px;
       font-weight: 500;
@@ -356,7 +380,8 @@
       <div class="headline-display placeholder" id="headlineDisplay">Loading...</div>
       <div class="input-row">
         <div class="input-wrapper">
-          <input type="text" class="headline-input" id="headlineInput" placeholder="Set a new headline" maxlength="500" autocomplete="off">
+          <input type="text" class="headline-input" id="headlineInput" placeholder="Set a new headline" maxlength="280" autocomplete="off">
+          <div class="char-counter" id="charCounter">280</div>
         </div>
         <button class="submit-btn" id="submitBtn" onclick="setHeadline()">Set Headline</button>
       </div>
@@ -547,6 +572,7 @@
           display.textContent = data.headline;
           display.classList.remove('placeholder');
           input.value = '';
+          updateCharCounter();
           showToast('Headline updated');
           await loadRecent(currentCountry);
         }
@@ -586,10 +612,37 @@
       return div.innerHTML;
     }
 
+    const MAX_CHARS = 280;
+
+    function updateCharCounter() {
+      const input = document.getElementById('headlineInput');
+      const counter = document.getElementById('charCounter');
+      const remaining = MAX_CHARS - input.value.length;
+
+      counter.textContent = remaining;
+
+      // Show counter when typing starts
+      if (input.value.length > 0) {
+        counter.classList.add('visible');
+      } else {
+        counter.classList.remove('visible');
+      }
+
+      // Update color based on remaining characters
+      counter.classList.remove('warning', 'critical');
+      if (remaining <= 10) {
+        counter.classList.add('critical');
+      } else if (remaining <= 50) {
+        counter.classList.add('warning');
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('headlineInput').addEventListener('keypress', (e) => {
+      const input = document.getElementById('headlineInput');
+      input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') setHeadline();
       });
+      input.addEventListener('input', updateCharCounter);
     });
 
     init();

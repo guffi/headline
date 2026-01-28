@@ -79,7 +79,7 @@ app.post('/api/headline/:country', async (req, res) => {
     }
 
     const timestamp = Date.now();
-    const trimmedHeadline = headline.trim().substring(0, 500);
+    const trimmedHeadline = headline.trim().substring(0, 280);
 
     const entry = JSON.stringify({ headline: trimmedHeadline, timestamp });
 
