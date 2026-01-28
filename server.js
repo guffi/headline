@@ -86,10 +86,9 @@ app.post('/api/headline/:country', async (req, res) => {
     // Save headline
     await redis('HSET', 'headlines', country, entry);
 
-    // Add to country's history (keep last 50)
+    // Add to country's history (store all entries)
     const historyKey = `history:${country}`;
     await redis('LPUSH', historyKey, entry);
-    await redis('LTRIM', historyKey, 0, 49);
 
     res.json({ country, headline: trimmedHeadline, timestamp });
   } catch (err) {
