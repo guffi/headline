@@ -123,6 +123,10 @@
       text-align: center;
       transition: border-color 0.2s;
       caret-color: #1d1d1f;
+      resize: none;
+      overflow: hidden;
+      min-height: 48px;
+      line-height: 1.4;
     }
 
     .headline-input::placeholder {
@@ -380,7 +384,7 @@
       <div class="headline-display placeholder" id="headlineDisplay">Loading...</div>
       <div class="input-row">
         <div class="input-wrapper">
-          <input type="text" class="headline-input" id="headlineInput" placeholder="Set a new headline" maxlength="280" autocomplete="off">
+          <textarea class="headline-input" id="headlineInput" placeholder="Set a new headline" maxlength="280" autocomplete="off" rows="1"></textarea>
           <div class="char-counter" id="charCounter">280</div>
         </div>
         <button class="submit-btn" id="submitBtn" onclick="setHeadline()">Set Headline</button>
@@ -614,12 +618,20 @@
 
     const MAX_CHARS = 280;
 
+    function autoResize(textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
     function updateCharCounter() {
       const input = document.getElementById('headlineInput');
       const counter = document.getElementById('charCounter');
       const remaining = MAX_CHARS - input.value.length;
 
       counter.textContent = remaining;
+
+      // Auto-resize textarea
+      autoResize(input);
 
       // Show counter when typing starts
       if (input.value.length > 0) {
@@ -639,8 +651,11 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       const input = document.getElementById('headlineInput');
-      input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') setHeadline();
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          setHeadline();
+        }
       });
       input.addEventListener('input', updateCharCounter);
     });
